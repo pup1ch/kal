@@ -1,0 +1,81 @@
+dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py .
+
+EXPOSE 5000
+
+# Запуск от непривилегированного пользователя (безопасность)
+RUN useradd -m -u 1000 appuser && chown -R appuser /app
+USER appuser
+
+CMD ["python", "app.py"]
+4. CI/CD: Jenkins Pipeline
+4.1. Jenkinsfile (Declarative Pipeline)
+groovy
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = 'calculator-microservice'
+        DOCKER_TAG = "${env.BUILD_ID}"
+        CONTAINER_NAME = 'calculator'
+        HOST_PORT = '5000'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                }
+            }
+        }
+stage('Run Tests') {
+            steps {
+                script {
+                    // Запуск контейнера для тестирования (можно добавить интеграционные тесты)
+                    sh "docker run -d --name test-${CONTAINER_NAME} -p ${HOST_PORT}:5000 ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    // Дать время контейнеру запуститься
+                    sleep 5
+                    // Пример простого теста через curl (можно заменить на pytest)
+                    sh "curl --fail http://localhost:${HOST_PORT}/calculate?a=5&b=3&op=add  exit 1"
+                    sh "docker stop test-${CONTAINER_NAME} && docker rm test-${CONTAINER_NAME}"
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    // Остановить и удалить старый контейнер (если есть)
+                    sh "docker stop ${CONTAINER_NAME}  true"
+                    sh "docker rm ${CONTAINER_NAME}  true"
+                    // Запустить новый контейнер
+                    sh "docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:5000 ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            script {
+                // Очистка в случае ошибки
+                sh "docker stop test-${CONTAINER_NAME}  true"
+                sh "docker rm test-${CONTAINER_NAME} || true"
+            }
+        }
+    }
+}
