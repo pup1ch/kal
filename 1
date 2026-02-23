@@ -1,0 +1,59 @@
+import json
+from flask import Flask, request, jsonify
+
+app = Flask(name)
+
+ALLOWED_OPS = {'add', 'subtract', 'multiply', 'divide'}
+
+def validate_numbers(a, b):
+    """Проверяет, что оба параметра — числа."""
+    try:
+        a_float = float(a)
+        b_float = float(b)
+        return a_float, b_float, None
+    except (TypeError, ValueError):
+        return None, None, "Параметры a и b должны быть числами"
+
+@app.route('/calculate', methods=['GET'])
+def calculate():
+    # Получение параметров
+    a = request.args.get('a')
+    b = request.args.get('b')
+    op = request.args.get('op')
+
+    # Проверка наличия всех параметров
+    if None in (a, b, op):
+        return jsonify({"error": "Необходимы параметры a, b и op"}), 400
+
+    # Валидация чисел
+    a_num, b_num, err = validate_numbers(a, b)
+    if err:
+        return jsonify({"error": err}), 400
+
+    # Валидация операции
+    if op not in ALLOWED_OPS:
+        return jsonify({"error": f"Операция должна быть одной из: {', '.join(ALLOWED_OPS)}"}), 400
+
+    # Выполнение операции
+    try:
+        if op == 'add':
+            result = a_num + b_num
+        elif op == 'subtract':
+            result = a_num - b_num
+        elif op == 'multiply':
+            result = a_num * b_num
+        elif op == 'divide':
+            if b_num == 0:
+                return jsonify({"error": "Деление на ноль запрещено"}), 400
+            result = a_num / b_num
+    except Exception as e:
+        return jsonify({"error": f"Ошибка вычисления: {str(e)}"}), 500
+
+    return jsonify({"result": result})
+
+if name == 'main':
+    # Не используем debug=True в production
+    app.run(host='0.0.0.0', port=5000)
+2.2. Файл зависимостей (requirements.txt)
+text
+Flask==2.2.3
